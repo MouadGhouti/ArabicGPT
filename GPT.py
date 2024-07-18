@@ -7,7 +7,7 @@ import inspect
 
 
 
-
+torch.set_printoptions(profile="full")
 
 class CausalSelfAttention(nn.Module):
 
@@ -71,11 +71,11 @@ class Block(nn.Module):
 
 @dataclass
 class GPTConfig:
-    block_size: int = 1024  # max sequence length
-    vocab_size: int = 32000  # tokenizer length
-    n_layer: int = 12 # number of layers
-    n_head: int = 12 # number of heads
-    n_embd: int = 768  # embedding dimension
+    block_size: int = 64  # max sequence length
+    vocab_size: int = 64000  # tokenizer length
+    n_layer: int = 2 # number of layers
+    n_head: int = 4 # number of heads
+    n_embd: int = 64  # embedding dimension
     master_process: bool = False
 
 class GPT(nn.Module, PyTorchModelHubMixin):

@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 import os
+from transformers import PreTrainedTokenizerFast
+
 #TODO: add master_process to dataloader
 def load_tokens(filename):
     npt = np.load(filename)
@@ -9,7 +11,7 @@ def load_tokens(filename):
     return ptt
 
 class DataLoaderLite:
-    def __init__(self, B, T, process_rank, num_processes, split, master_process): 
+    def __init__(self, B, T, process_rank, num_processes, split, master_process, data_path="ArabicGPT/shards"): 
         self.B = B
         self.T = T
         self.process_rank = process_rank
@@ -17,7 +19,7 @@ class DataLoaderLite:
         assert split in {'train', 'val'}
 
         # get the shard filenames
-        data_root = "shards"#file name where shards are stored
+        data_root = data_path #file name where shards are stored
         shards = os.listdir(data_root)
         shards = [s for s in shards if split in s]
         shards = sorted(shards)
@@ -47,3 +49,17 @@ class DataLoaderLite:
             self.tokens = load_tokens(self.shards[self.current_shard])
             self.current_position = B * T * self.process_rank
         return x, y
+    
+
+
+def testingfunc():
+    train = DataLoaderLite(B=32, T=1024, process_rank=0, num_processes=1, split='train', master_process=True)
+    x, y = train.next_batch()
+    enc = PreTrainedTokenizerFast(tokenizer_file=f"ArabicGPT/tokenizers/TBPE_tokenizer_32.0K.json")
+    
+    with open("decodings.txt", "w", encoding="UTF-8") as file:
+        for input in x[:]:
+            decoded_text = enc.decode(input)
+            file.write(decoded_text + "\n")
+    
+    print("Decodings have been written to decodings.txt file.")

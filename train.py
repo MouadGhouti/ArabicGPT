@@ -27,8 +27,9 @@ def get_num_steps(total_batch_size, total_number_of_tokens=4e9):
     return total_number_of_tokens//total_batch_size
 
 
-def training_loop(num_tokens, B=32, T=1024, num_epoch=1):
+def training_loop(passed_model, num_tokens, B=32, T=1024, num_epoch=1, data_path="ArabicGPT/shards"):
     ddp, ddp_rank, ddp_local_rank, ddp_world_size, master_process, device = is_ddp()
+   
     device_type = "cuda" if device.startswith("cuda") else "cpu"
     B ,T, total_batch_size, grad_accum_steps = set_batch_size(B1=B, T1=T, ddp_world_size=ddp_world_size)#CHANGE BATCH SIZE HERE
 
@@ -41,29 +42,30 @@ def training_loop(num_tokens, B=32, T=1024, num_epoch=1):
 
     max_steps = num_steps * num_epochs #if data is 10B tokens and batch size 0.5M tokens (10B in 2 hours on 8 GPUs)
 
-
-    enc = PreTrainedTokenizerFast(tokenizer_file="./tokenizers/TBPE_tokenizer_32.0K.json")
-
     if master_process:
         print(f"total desired batch size: {total_batch_size}")
         print(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
         print(f"Number of steps per epoch: {num_steps}")
         print(f"Number of epochs: {num_epochs}")
+        print("Number of GPUs:",ddp_world_size)
 
 
 
-    train_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="train", master_process=master_process)
-    val_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="val", master_process=master_process)
+    train_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="train", master_process=master_process, data_path=data_path)
+    val_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="val", master_process=master_process,  data_path=data_path)
 
 
 
 
     # create model
-    model = GPT(GPTConfig(vocab_size=int(enc.vocab_size), master_process = master_process))
+    model = passed_model
     model.to(device)
     use_compile = True 
     if use_compile:
-        model = torch.compile(model)
+        try:
+            model = torch.compile(model)
+        except:
+            print("torch.compile failed. Switching to torch.compile mode disabled.")
     if ddp:
         model = DDP(model, device_ids=[ddp_local_rank])
     raw_model = model.module if ddp else model # always contains the "raw" unwrapped model
@@ -97,16 +99,14 @@ def training_loop(num_tokens, B=32, T=1024, num_epoch=1):
     for step in range(max_steps):
         t0 = time.time()
         last_step = (step == max_steps - 1)
-
-
         # once in a while evaluate our validation loss
         if step % 250 == 0 or last_step:
             model.eval()
             val_loader.reset()
             with torch.no_grad():
                 val_loss_accum = 0.0
-                val_loss_steps = 20
-                for _ in range(val_loss_steps):
+                val_loss_steps = 10
+                for _ in range(val_loss_steps): 
                     x, y = val_loader.next_batch()
                     x, y = x.to(device), y.to(device)
                     with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
@@ -163,6 +163,7 @@ def training_loop(num_tokens, B=32, T=1024, num_epoch=1):
         if ddp:
             dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        print(model.parameters())
         # determine and set the learning rate for this iteration
         lr = get_lr(step)
         for param_group in optimizer.param_groups:

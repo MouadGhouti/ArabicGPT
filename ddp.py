@@ -19,8 +19,8 @@ def is_ddp():
 
     else:
         # vanilla, non-DDP run
-        ddp_rank = 0
-        ddp_local_rank = 0
+        ddp_rank = 1
+        ddp_local_rank = 1
         ddp_world_size = 1
         master_process = True
         # attempt to autodetect device
