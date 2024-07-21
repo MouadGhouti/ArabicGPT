@@ -42,6 +42,6 @@ def Generate(model ,tokenizer , example = "السلام عليكم ورحمة ا
             print(f"rank {ddp_rank} sample {i}: {decoded}")
             
             
-            with open('generation.txt', "a", encoding="utf-8") as f:
+            with open('./generation.txt', "a", encoding="utf-8") as f:
                 f.write(f"rank {ddp_rank} sample {i}: {decoded} \n")
     print("Written to file")
