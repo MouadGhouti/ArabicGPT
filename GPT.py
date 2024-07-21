@@ -4,7 +4,10 @@ import torch.nn as nn
 from torch.nn import functional as F
 from huggingface_hub import PyTorchModelHubMixin
 import inspect
-
+from ddp import is_master_process
+import os 
+import json
+import safetensors
 
 
 torch.set_printoptions(profile="full")
@@ -76,7 +79,7 @@ class GPTConfig:
     n_layer: int = 2 # number of layers
     n_head: int = 4 # number of heads
     n_embd: int = 64  # embedding dimension
-    master_process: bool = False
+    master_process: bool = is_master_process()
 
 class GPT(nn.Module, PyTorchModelHubMixin):
 
@@ -129,7 +132,23 @@ class GPT(nn.Module, PyTorchModelHubMixin):
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
         return logits, loss
     
-    
+    @classmethod
+    def from_pretrained(cls, model_path):
+        config_path =  os.path.join(model_path, 'config.json')
+        assert os.path.exists(config_path), f"{config_path} does not exist"
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+
+        config = GPTConfig(**data)
+        print(f"Loaded config: {config}")
+        loaded_model = cls(config)
+
+
+
+        with safetensors.safe_open(os.path.join(model_path, 'model.safetensors'), framework='pt') as f:
+            for key in f.keys():
+                loaded_model.state_dict()[key] = f.get_tensor(key)
+        return loaded_model
     
     
     def configure_optimizers(self, weight_decay, learning_rate, device_type):
@@ -152,6 +171,7 @@ class GPT(nn.Module, PyTorchModelHubMixin):
         # Create AdamW optimizer and use the fused version if it is available
         fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
         use_fused = fused_available and device_type == "cuda"
+
         if self.config.master_process:
             print(f"using fused AdamW: {use_fused}")
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=(0.9, 0.95), eps=1e-8, fused=use_fused)

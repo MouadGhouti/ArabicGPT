@@ -29,7 +29,7 @@ def get_num_steps(total_batch_size, total_number_of_tokens=4e9):
 
 def training_loop(passed_model, num_tokens, B=32, T=1024, num_epoch=1, data_path="ArabicGPT/shards"):
     ddp, ddp_rank, ddp_local_rank, ddp_world_size, master_process, device = is_ddp()
-   
+    
     device_type = "cuda" if device.startswith("cuda") else "cpu"
     B ,T, total_batch_size, grad_accum_steps = set_batch_size(B1=B, T1=T, ddp_world_size=ddp_world_size)#CHANGE BATCH SIZE HERE
 
@@ -163,7 +163,6 @@ def training_loop(passed_model, num_tokens, B=32, T=1024, num_epoch=1, data_path
         if ddp:
             dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        print(model.parameters())
         # determine and set the learning rate for this iteration
         lr = get_lr(step)
         for param_group in optimizer.param_groups:
@@ -182,5 +181,3 @@ def training_loop(passed_model, num_tokens, B=32, T=1024, num_epoch=1, data_path
 
     if ddp:
         destroy_process_group()
-
-    return model
