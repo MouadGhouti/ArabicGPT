@@ -1,7 +1,7 @@
 import os
 import torch
 from torch.distributed import init_process_group
-
+os.environ['CUDA_VISIBLE_DEVICES']
 
 
 def is_ddp():
