@@ -8,7 +8,7 @@ def is_ddp():
     ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
     if ddp:
         # use of DDP atm demands CUDA, we set the device appropriately according to rank
-        assert torch.cuda.is_available(), "for now i think we need CUDA for DDP"
+        assert torch.cuda.is_available(), "We need CUDA for DDP"
         init_process_group(backend='nccl')
         ddp_rank = int(os.environ['RANK'])
         ddp_local_rank = int(os.environ['LOCAL_RANK'])
@@ -32,3 +32,10 @@ def is_ddp():
         print(f"using device: {device}")
 
     return ddp, ddp_rank, ddp_local_rank, ddp_world_size, master_process, device
+
+
+def is_master_process():
+    if  not torch.cuda.is_available():
+        return True
+    else:
+        return int(os.environ.get('RANK', -1)) == 0
